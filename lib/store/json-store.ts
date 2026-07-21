@@ -7,6 +7,7 @@
 import 'server-only';
 
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { createSeed, type DbShape } from './seed';
 import type {
@@ -23,15 +24,35 @@ import type {
   WorkspaceRow,
 } from './types';
 
-const DATA_DIR = path.join(process.cwd(), 'data');
-const DB_FILE = path.join(DATA_DIR, 'wwpro.db.json');
-
 /** Module-level cache surviving Next.js dev hot reloads. */
-const globalCache = globalThis as unknown as { __wwproDb?: Promise<DbShape> };
+const globalCache = globalThis as unknown as { __wwproDb?: Promise<DbShape>; __wwproDir?: string };
+
+/**
+ * Resolves the writable data directory: WWPRO_DATA_DIR, else ./data, else the
+ * OS temp dir (serverless platforms like Vercel have a read-only app dir —
+ * the temp fallback keeps the demo functional, but data is ephemeral there).
+ */
+async function dataDir(): Promise<string> {
+  if (globalCache.__wwproDir) return globalCache.__wwproDir;
+  const preferred = process.env.WWPRO_DATA_DIR ?? path.join(process.cwd(), 'data');
+  try {
+    await mkdir(preferred, { recursive: true });
+    globalCache.__wwproDir = preferred;
+  } catch {
+    const fallback = path.join(os.tmpdir(), 'wwpro-data');
+    await mkdir(fallback, { recursive: true });
+    globalCache.__wwproDir = fallback;
+  }
+  return globalCache.__wwproDir;
+}
+
+async function dbFile(): Promise<string> {
+  return path.join(await dataDir(), 'wwpro.db.json');
+}
 
 async function loadDb(): Promise<DbShape> {
   try {
-    const raw = await readFile(DB_FILE, 'utf8');
+    const raw = await readFile(await dbFile(), 'utf8');
     return JSON.parse(raw) as DbShape;
   } catch {
     const seeded = createSeed(new Date().toISOString().slice(0, 10));
@@ -41,10 +62,10 @@ async function loadDb(): Promise<DbShape> {
 }
 
 async function persist(db: DbShape): Promise<void> {
-  await mkdir(DATA_DIR, { recursive: true });
-  const tmp = `${DB_FILE}.tmp`;
+  const file = await dbFile();
+  const tmp = `${file}.tmp`;
   await writeFile(tmp, JSON.stringify(db, null, 2), 'utf8');
-  await rename(tmp, DB_FILE);
+  await rename(tmp, file);
 }
 
 function getDb(): Promise<DbShape> {
