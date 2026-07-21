@@ -51,6 +51,21 @@ npm run test    # Engine- und Logik-Tests (Vitest)
 npm run build   # Produktions-Build
 ```
 
+## Supabase verbinden (Live-Daten + Login)
+
+1. Neues Supabase-Projekt anlegen und die Migrationen aus `supabase/migrations/`
+   im SQL-Editor ausführen (`0001_init.sql`, dann `0002_plan_fields.sql`).
+2. `.env.local` nach dem Muster von `.env.example` füllen
+   (URL, Anon-Key, Service-Role-Key — Werte aus *Project Settings → API*).
+3. Fertig: Beim nächsten Start nutzt WWPro die Live-Datenbank, Workspace und
+   Standardkalender werden automatisch angelegt, und die App verlangt einen
+   Login (Registrierung mit E-Mail + Passwort unter `/register`).
+
+Ohne diese Variablen läuft WWPro im lokalen JSON-Datei-Modus ohne Login.
+Der Anon-Key wird ausschließlich für die Authentifizierung genutzt — alle
+Tabellen sind per RLS gesperrt (default deny), Daten fließen nur über die
+serverseitigen API-Routen mit dem Service-Role-Key.
+
 ## Architektur
 
 - `engine/` — **pure TypeScript Scheduling-Engine** (keine React/Next-Imports):

@@ -7,8 +7,9 @@
  */
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
-import { CalendarCog, FolderKanban, Gauge, Users } from 'lucide-react';
+import { usePathname, useRouter } from 'next/navigation';
+import { CalendarCog, FolderKanban, Gauge, LogOut, Users } from 'lucide-react';
+import { authEnabled, supabaseBrowser } from '@/lib/supabase/browser';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import CommandPalette from './command-palette';
@@ -27,6 +28,10 @@ const NAV_ITEMS = [
  */
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
+  if (pathname.startsWith('/login') || pathname.startsWith('/register')) {
+    return <>{children}</>;
+  }
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-background">
       <aside className="flex w-14 shrink-0 flex-col items-center gap-1 border-r bg-muted/30 py-3">
@@ -57,7 +62,31 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </Tooltip>
           );
         })}
-        <div className="mt-auto text-[10px] text-muted-foreground">⌘K</div>
+        <div className="mt-auto flex flex-col items-center gap-2">
+          {authEnabled && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Abmelden"
+                  className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  onClick={() => {
+                    void supabaseBrowser()
+                      .auth.signOut()
+                      .then(() => {
+                        router.push('/login');
+                        router.refresh();
+                      });
+                  }}
+                >
+                  <LogOut className="size-5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">Abmelden</TooltipContent>
+            </Tooltip>
+          )}
+          <span className="text-[10px] text-muted-foreground">⌘K</span>
+        </div>
       </aside>
       <main className="min-w-0 flex-1 overflow-hidden">{children}</main>
       <CommandPalette />
