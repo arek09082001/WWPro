@@ -51,20 +51,23 @@ npm run test    # Engine- und Logik-Tests (Vitest)
 npm run build   # Produktions-Build
 ```
 
-## Supabase verbinden (Live-Daten + Login)
+## Login & Datenbank
 
-1. Neues Supabase-Projekt anlegen und die Migrationen aus `supabase/migrations/`
-   im SQL-Editor ausführen (`0001_init.sql`, dann `0002_plan_fields.sql`).
-2. `.env.local` nach dem Muster von `.env.example` füllen
-   (URL, Anon-Key, Service-Role-Key — Werte aus *Project Settings → API*).
-3. Fertig: Beim nächsten Start nutzt WWPro die Live-Datenbank, Workspace und
-   Standardkalender werden automatisch angelegt, und die App verlangt einen
-   Login (Registrierung mit E-Mail + Passwort unter `/register`).
+Die Anmeldung läuft über **NextAuth (Credentials)** mit bcrypt-gehashten
+Passwörtern — registrieren unter `/register`, Nutzer liegen in der eigenen
+`app_users`-Tabelle (bzw. im JSON-Store lokal). `AUTH_SECRET` setzen
+(z. B. `openssl rand -base64 32`).
 
-Ohne diese Variablen läuft WWPro im lokalen JSON-Datei-Modus ohne Login.
-Der Anon-Key wird ausschließlich für die Authentifizierung genutzt — alle
-Tabellen sind per RLS gesperrt (default deny), Daten fließen nur über die
-serverseitigen API-Routen mit dem Service-Role-Key.
+**Supabase als Live-Datenbank (optional):**
+1. SQL aus `supabase/setup.sql` im Supabase-SQL-Editor ausführen.
+2. `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` in `.env.local`/Vercel setzen
+   (Werte aus *Project Settings → API*).
+3. Fertig — Workspace und Standardkalender werden automatisch angelegt.
+
+Ohne die Supabase-Variablen läuft WWPro im lokalen JSON-Datei-Modus.
+Alle Tabellen sind per RLS gesperrt (default deny); Daten fließen ausschließlich
+über die serverseitigen API-Routen mit dem Service-Role-Key. Es gelangen keine
+Datenbank-Schlüssel in den Browser.
 
 ## Architektur
 

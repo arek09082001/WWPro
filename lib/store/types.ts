@@ -138,6 +138,15 @@ export interface AssignmentRow {
   units: number;
 }
 
+/** An application user for credentials login (bcrypt password hash). */
+export interface UserRow {
+  id: string;
+  email: string;
+  passwordHash: string;
+  name: string | null;
+  createdAt: string;
+}
+
 /** Everything a project view (Gantt, engine) needs in one round trip. */
 export interface ProjectSnapshot {
   workspace: WorkspaceRow;
@@ -160,6 +169,9 @@ export interface TaskBatch {
 
 /** Storage abstraction implemented by the JSON file store and the Supabase store. */
 export interface Store {
+  getUserByEmail(email: string): Promise<UserRow | null>;
+  createUser(row: UserRow): Promise<UserRow>;
+
   getWorkspace(): Promise<WorkspaceRow>;
   updateWorkspace(patch: Partial<Omit<WorkspaceRow, 'id'>>): Promise<WorkspaceRow>;
 

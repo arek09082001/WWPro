@@ -1,14 +1,16 @@
 'use client';
 
 /**
- * Shared login/registration card: email + password form with German labels,
- * error display and a link to the sibling page.
+ * Shared login/registration card for the NextAuth credentials flow:
+ * email + password with bcrypt-hashed storage, German labels, error display
+ * and a link to the sibling page.
  */
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { authEnabled, supabaseBrowser } from '@/lib/supabase/browser';
+import { signIn } from 'next-auth/react';
+import { api } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,51 +29,30 @@ interface AuthCardProps {
  */
 export default function AuthCard({ mode }: AuthCardProps) {
   const router = useRouter();
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const isLogin = mode === 'login';
 
   async function onSubmit(event: React.FormEvent) {
     event.preventDefault();
     setError(null);
-    setInfo(null);
-    if (!authEnabled) {
-      setError('Supabase ist nicht konfiguriert — die App läuft im lokalen Modus ohne Login.');
-      return;
-    }
-    if (password.length < 6) {
-      setError('Das Passwort muss mindestens 6 Zeichen haben.');
-      return;
-    }
     setPending(true);
-    const supabase = supabaseBrowser();
     try {
-      if (isLogin) {
-        const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-        if (authError) {
-          setError(
-            authError.message === 'Invalid login credentials'
-              ? 'E-Mail oder Passwort ist falsch.'
-              : authError.message,
-          );
-          return;
-        }
-      } else {
-        const { data, error: authError } = await supabase.auth.signUp({ email, password });
-        if (authError) {
-          setError(authError.message);
-          return;
-        }
-        if (!data.session) {
-          setInfo('Registrierung erfolgreich — bitte bestätige deine E-Mail-Adresse und melde dich dann an.');
-          return;
-        }
+      if (!isLogin) {
+        await api('/api/register', { method: 'POST', json: { email, password, name } });
+      }
+      const result = await signIn('credentials', { email, password, redirect: false });
+      if (result?.error) {
+        setError('E-Mail oder Passwort ist falsch.');
+        return;
       }
       router.push('/projects');
       router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Es ist ein Fehler aufgetreten.');
     } finally {
       setPending(false);
     }
@@ -92,6 +73,17 @@ export default function AuthCard({ mode }: AuthCardProps) {
           </div>
         </div>
         <form onSubmit={onSubmit} className="space-y-3">
+          {!isLogin && (
+            <div className="space-y-1.5">
+              <Label htmlFor="auth-name">Name</Label>
+              <Input
+                id="auth-name"
+                autoComplete="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="auth-email">E-Mail</Label>
             <Input
@@ -116,7 +108,6 @@ export default function AuthCard({ mode }: AuthCardProps) {
             />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          {info && <p className="text-sm text-emerald-600">{info}</p>}
           <Button type="submit" className="w-full" disabled={pending}>
             {isLogin ? 'Anmelden' : 'Registrieren'}
           </Button>

@@ -22,6 +22,7 @@ import type {
   Store,
   TaskBatch,
   TaskRow,
+  UserRow,
   WorkspaceRow,
 } from './types';
 
@@ -32,6 +33,14 @@ function fail(message: string, status = 500): never {
 /* ---------- row mappers (db snake_case ⇄ app camelCase) ---------- */
 
 type Db = Record<string, unknown>;
+
+const mapUser = (r: Db): UserRow => ({
+  id: r.id as string,
+  email: r.email as string,
+  passwordHash: r.password_hash as string,
+  name: (r.name ?? null) as string | null,
+  createdAt: r.created_at as string,
+});
 
 const mapWorkspace = (r: Db): WorkspaceRow => ({
   id: r.id as string,
@@ -216,6 +225,31 @@ export class SupabaseStore implements Store {
   private async wsId(): Promise<string> {
     if (!this.workspaceId) await this.ensureWorkspace();
     return this.workspaceId!;
+  }
+
+  async getUserByEmail(email: string): Promise<UserRow | null> {
+    const { data, error } = await this.client
+      .from('app_users')
+      .select('*')
+      .eq('email', email)
+      .maybeSingle();
+    if (error) fail(error.message);
+    return data ? mapUser(data) : null;
+  }
+
+  async createUser(row: UserRow): Promise<UserRow> {
+    const { data, error } = await this.client
+      .from('app_users')
+      .insert({ id: row.id, email: row.email, password_hash: row.passwordHash, name: row.name })
+      .select('*')
+      .single();
+    if (error) {
+      fail(
+        error.code === '23505' ? 'Diese E-Mail ist bereits registriert' : error.message,
+        error.code === '23505' ? 409 : 500,
+      );
+    }
+    return mapUser(data);
   }
 
   async getWorkspace(): Promise<WorkspaceRow> {
