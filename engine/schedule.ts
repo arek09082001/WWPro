@@ -215,7 +215,7 @@ export function computeSchedule(input: ScheduleInput): ScheduleResult {
 
       const duration = task.isMilestone ? 0 : task.durationMinutes;
       const projectStartMoment: WorkMoment = { date: input.projectStart, minute: 0 };
-      const candidates: { moment: WorkMoment; driver: StartDriver }[] = [
+      const candidates: { moment: WorkMoment; driver: Extract<StartDriver, { binding: boolean }> }[] = [
         {
           moment: projectStartMoment,
           driver: { kind: 'projectStart', date: input.projectStart, binding: false },
