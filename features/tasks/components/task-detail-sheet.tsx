@@ -15,6 +15,14 @@ import type { DepType, TaskInput } from '@/engine/types';
 import { buildScheduleInput } from '@/lib/mappers';
 import { computeSchedule } from '@/engine/schedule';
 import { formatDuration, formatMoment, formatWorkHours, parseDurationInput } from '@/lib/format';
+import {
+  PLAN_CATEGORIES,
+  PLAN_CATEGORY_ORDER,
+  PLAN_STATUSES,
+  PLAN_STATUS_ORDER,
+  type PlanCategory,
+  type PlanStatus,
+} from '@/lib/plan-meta';
 import { useProjectMutations } from '@/lib/queries/use-project';
 import type { ProjectSnapshot, TaskRow } from '@/lib/store/types';
 import { Badge } from '@/components/ui/badge';
@@ -242,6 +250,84 @@ export default function TaskDetailSheet({ snapshot, taskId, onClose }: TaskDetai
           </TabsList>
 
           <TabsContent value="general" className="space-y-4 pt-3">
+            {!task.isMilestone && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Planart</Label>
+                  <Select
+                    value={task.category}
+                    onValueChange={(value) => {
+                      const category = value as PlanCategory;
+                      const code = PLAN_CATEGORIES[category].code;
+                      commit({
+                        category,
+                        planNumber:
+                          task.planNumber ?? (code ? `${code}-` : null),
+                      });
+                    }}
+                  >
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PLAN_CATEGORY_ORDER.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          <span className="flex items-center gap-2">
+                            <span className="size-2 rounded-sm" style={{ backgroundColor: PLAN_CATEGORIES[category].color }} />
+                            {PLAN_CATEGORIES[category].label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Plannummer</Label>
+                  <Input
+                    key={`pn-${task.id}`}
+                    defaultValue={task.planNumber ?? ''}
+                    placeholder="z. B. S-101"
+                    className="font-mono"
+                    onBlur={(e) => {
+                      const value = e.target.value.trim();
+                      if (value !== (task.planNumber ?? '')) commit({ planNumber: value || null });
+                    }}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Status</Label>
+                  <Select value={task.status} onValueChange={(value) => commit({ status: value as PlanStatus })}>
+                    <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PLAN_STATUS_ORDER.map((status) => (
+                        <SelectItem key={status} value={status}>
+                          <span className="flex items-center gap-2">
+                            <span className="size-2 rounded-full" style={{ backgroundColor: PLAN_STATUSES[status].color }} />
+                            {PLAN_STATUSES[status].label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Liefertermin (Soll)</Label>
+                  <Input
+                    type="date"
+                    value={task.dueDate ?? ''}
+                    onChange={(e) => commit({ dueDate: e.target.value || null })}
+                  />
+                </div>
+              </div>
+            )}
+            {task.isMilestone && (
+              <div className="space-y-1.5">
+                <Label>Liefertermin (Soll)</Label>
+                <Input
+                  type="date"
+                  value={task.dueDate ?? ''}
+                  onChange={(e) => commit({ dueDate: e.target.value || null })}
+                />
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Dauer</Label>

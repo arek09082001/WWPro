@@ -21,8 +21,10 @@ import { formatDuration, formatIsoDateShort, parseDurationInput, todayIso } from
 import { useProjectMutations } from '@/lib/queries/use-project';
 import type { AssignmentRow, DependencyRow, ProjectSnapshot, TaskRow } from '@/lib/store/types';
 import { cn } from '@/lib/utils';
+import { PLAN_CATEGORIES } from '@/lib/plan-meta';
 import { useGanttStore } from '../hooks/use-gantt-store';
-import { useSchedule, type GanttRow } from '../hooks/use-schedule';
+import { lateWorkingDays, useSchedule, type GanttRow } from '../hooks/use-schedule';
+import ProjectCockpit from './project-cockpit';
 import { useTimeScale } from '../hooks/use-time-scale';
 import DependencyLayer from './dependency-layer';
 import GanttToolbar from './gantt-toolbar';
@@ -347,6 +349,9 @@ export default function GanttView({ snapshot }: GanttViewProps) {
           },
         ]);
       },
+      setStatus: (row, status) => {
+        void mutations.upsertTasks([{ ...row.task, status }]);
+      },
       remove: removeWithUndo,
       open: (row) => router.push(`?task=${row.task.id}`, { scroll: false }),
     }),
@@ -644,8 +649,19 @@ export default function GanttView({ snapshot }: GanttViewProps) {
     <div className="flex h-full flex-col">
       <GanttToolbar
         project={snapshot.project}
+        employees={snapshot.employees.filter((e) => e.active)}
         onAddTask={addTaskAtEnd}
         onScrollToday={() => scrollToDate(today)}
+      />
+      <ProjectCockpit
+        snapshot={snapshot}
+        result={result}
+        projectCalendar={projectCalendar}
+        onJumpToTask={(taskId) => {
+          select(taskId);
+          const s = result.tasks.get(taskId);
+          if (s) scrollToDate(s.start.date);
+        }}
       />
       <div ref={scrollRef} className="relative flex-1 overflow-auto overscroll-none">
         <div
@@ -821,7 +837,17 @@ export default function GanttView({ snapshot }: GanttViewProps) {
             const slackWidth = scheduled
               ? (scheduled.totalSlackMinutes / projectCalendar.averageDayCapacity) * scale.dayWidth
               : 0;
-            const barColor = assignees.length === 1 ? assignees[0].color : snapshot.project.color;
+            const barColor =
+              row.task.category !== 'sonstiges'
+                ? PLAN_CATEGORIES[row.task.category].color
+                : assignees.length === 1
+                  ? assignees[0].color
+                  : snapshot.project.color;
+            const lateDays = lateWorkingDays(row.task, scheduled?.end, projectCalendar);
+            const dueX =
+              row.task.dueDate && row.task.dueDate >= scale.rangeStart && row.task.dueDate <= scale.rangeEnd
+                ? scale.x(row.task.dueDate) + scale.dayWidth
+                : undefined;
             return (
               <div
                 key={row.task.id}
@@ -841,6 +867,7 @@ export default function GanttView({ snapshot }: GanttViewProps) {
                   assignees={assignees}
                   selected={selectedTaskId === row.task.id}
                   avgDayCapacity={projectCalendar.averageDayCapacity}
+                  lateDays={lateDays}
                   collapsed={collapsed.has(row.task.id)}
                   onSelect={() => select(row.task.id)}
                   onToggleCollapsed={() => toggleCollapsed(row.task.id)}
@@ -887,6 +914,9 @@ export default function GanttView({ snapshot }: GanttViewProps) {
                       })).filter((a) => a.employee)}
                       slackWidth={slackWidth}
                       taskNames={taskNames}
+                      dueX={dueX}
+                      lateDays={lateDays}
+                      showLabel={(zoom === 'day' || zoom === 'week') && !scheduled.isSummary}
                       onPointerDownBody={(e) => startMoveDrag(row.task, e)}
                       onPointerDownResize={(e) => startResizeDrag(row.task, e)}
                       onPointerDownLink={(e) => startLinkDrag(row.task, e)}
