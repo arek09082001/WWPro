@@ -215,6 +215,10 @@ export default function GanttView({ snapshot }: GanttViewProps) {
         workMinutes: 480,
         percentComplete: 0,
         notes: null,
+        category: 'sonstiges',
+        planNumber: null,
+        status: 'in_bearbeitung',
+        dueDate: null,
       };
       void mutations.upsertTasks([row]);
       select(row.id);

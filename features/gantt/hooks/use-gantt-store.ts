@@ -7,9 +7,39 @@
  */
 
 import { create } from 'zustand';
+import type { PlanCategory, PlanStatus } from '@/lib/plan-meta';
 
 /** Available zoom levels (pixel-per-day widths are defined in useTimeScale). */
 export type ZoomLevel = 'day' | 'week' | 'month' | 'quarter';
+
+/** Row filter of the Gantt (empty arrays = no restriction). */
+export interface GanttFilter {
+  employeeIds: string[];
+  categories: PlanCategory[];
+  statuses: PlanStatus[];
+  onlyCritical: boolean;
+  onlyLate: boolean;
+}
+
+/** The neutral filter (shows everything). */
+export const EMPTY_FILTER: GanttFilter = {
+  employeeIds: [],
+  categories: [],
+  statuses: [],
+  onlyCritical: false,
+  onlyLate: false,
+};
+
+/** Number of active filter dimensions (for the toolbar badge). */
+export function activeFilterCount(filter: GanttFilter): number {
+  return (
+    (filter.employeeIds.length > 0 ? 1 : 0) +
+    (filter.categories.length > 0 ? 1 : 0) +
+    (filter.statuses.length > 0 ? 1 : 0) +
+    (filter.onlyCritical ? 1 : 0) +
+    (filter.onlyLate ? 1 : 0)
+  );
+}
 
 /** Transient state of an active bar drag. */
 export interface DragState {
@@ -36,12 +66,15 @@ interface GanttState {
   selectedTaskId: string | null;
   collapsed: Set<string>;
   criticalVisible: boolean;
+  filter: GanttFilter;
   drag: DragState | null;
   linkDrag: LinkDragState | null;
   setZoom(zoom: ZoomLevel): void;
   select(taskId: string | null): void;
   toggleCollapsed(taskId: string): void;
   toggleCritical(): void;
+  setFilter(patch: Partial<GanttFilter>): void;
+  resetFilter(): void;
   setDrag(drag: DragState | null): void;
   setLinkDrag(drag: LinkDragState | null): void;
 }
@@ -52,9 +85,12 @@ export const useGanttStore = create<GanttState>((set) => ({
   selectedTaskId: null,
   collapsed: new Set<string>(),
   criticalVisible: false,
+  filter: EMPTY_FILTER,
   drag: null,
   linkDrag: null,
   setZoom: (zoom) => set({ zoom }),
+  setFilter: (patch) => set((state) => ({ filter: { ...state.filter, ...patch } })),
+  resetFilter: () => set({ filter: EMPTY_FILTER }),
   select: (selectedTaskId) => set({ selectedTaskId }),
   toggleCollapsed: (taskId) =>
     set((state) => {

@@ -23,8 +23,16 @@ export interface GanttRow {
   index: number;
 }
 
-/** Flattens the task tree in sortKey order, hiding children of collapsed summaries. */
-export function flattenTasks(tasks: TaskRow[], collapsed: Set<string>): GanttRow[] {
+/**
+ * Flattens the task tree in sortKey order, hiding children of collapsed
+ * summaries. When `visible` is given, only tasks in the set are emitted
+ * (the set must already contain the ancestors of every match).
+ */
+export function flattenTasks(
+  tasks: TaskRow[],
+  collapsed: Set<string>,
+  visible?: Set<string>,
+): GanttRow[] {
   const childrenOf = new Map<string | null, TaskRow[]>();
   for (const task of tasks) {
     const list = childrenOf.get(task.parentId) ?? [];
@@ -37,6 +45,7 @@ export function flattenTasks(tasks: TaskRow[], collapsed: Set<string>): GanttRow
   const rows: GanttRow[] = [];
   const walk = (parentId: string | null, depth: number) => {
     for (const task of childrenOf.get(parentId) ?? []) {
+      if (visible && !visible.has(task.id)) continue;
       const hasChildren = (childrenOf.get(task.id)?.length ?? 0) > 0;
       rows.push({ task, depth, hasChildren, index: rows.length });
       if (hasChildren && !collapsed.has(task.id)) walk(task.id, depth + 1);
@@ -44,6 +53,18 @@ export function flattenTasks(tasks: TaskRow[], collapsed: Set<string>): GanttRow
   };
   walk(null, 0);
   return rows;
+}
+
+/** Working days a task finishes after its due date (0 when on time or no due date). */
+export function lateWorkingDays(
+  task: TaskRow,
+  end: WorkMoment | undefined,
+  calendar: CompiledCalendar,
+): number {
+  if (!task.dueDate || !end) return 0;
+  const overrun = calendar.workingMinutesBetween({ date: task.dueDate, minute: 1440 }, end);
+  if (overrun <= 0) return 0;
+  return Math.round((overrun / calendar.averageDayCapacity) * 10) / 10;
 }
 
 /** Result bundle of {@link useSchedule}. */
@@ -64,15 +85,57 @@ export interface ScheduleBundle {
 export function useSchedule(snapshot: ProjectSnapshot): ScheduleBundle {
   const collapsed = useGanttStore((s) => s.collapsed);
   const drag = useGanttStore((s) => s.drag);
+  const filter = useGanttStore((s) => s.filter);
 
   const input = useMemo(() => buildScheduleInput(snapshot), [snapshot]);
   const result = useMemo(() => computeSchedule(input), [input]);
-  const rows = useMemo(() => flattenTasks(snapshot.tasks, collapsed), [snapshot.tasks, collapsed]);
+  const projectCalendar = useMemo(() => compileCalendar(input.projectCalendar), [input]);
+
+  /** Ids passing the filter, expanded with all their ancestors (undefined = filter inactive). */
+  const visibleIds = useMemo(() => {
+    const active =
+      filter.employeeIds.length > 0 ||
+      filter.categories.length > 0 ||
+      filter.statuses.length > 0 ||
+      filter.onlyCritical ||
+      filter.onlyLate;
+    if (!active) return undefined;
+    const byId = new Map(snapshot.tasks.map((t) => [t.id, t]));
+    const employeesByTask = new Map<string, string[]>();
+    for (const a of snapshot.assignments) {
+      employeesByTask.set(a.taskId, [...(employeesByTask.get(a.taskId) ?? []), a.employeeId]);
+    }
+    const summaryIds = new Set(snapshot.tasks.map((t) => t.parentId).filter(Boolean) as string[]);
+    const visible = new Set<string>();
+    for (const task of snapshot.tasks) {
+      if (summaryIds.has(task.id)) continue; // summaries follow their children
+      const scheduled = result.tasks.get(task.id);
+      if (filter.employeeIds.length > 0) {
+        const employees = employeesByTask.get(task.id) ?? [];
+        if (!employees.some((id) => filter.employeeIds.includes(id))) continue;
+      }
+      if (filter.categories.length > 0 && !filter.categories.includes(task.category)) continue;
+      if (filter.statuses.length > 0 && !filter.statuses.includes(task.status)) continue;
+      if (filter.onlyCritical && !scheduled?.isCritical) continue;
+      if (filter.onlyLate && lateWorkingDays(task, scheduled?.end, projectCalendar) <= 0) continue;
+      visible.add(task.id);
+      let parentId = task.parentId;
+      while (parentId && !visible.has(parentId)) {
+        visible.add(parentId);
+        parentId = byId.get(parentId)?.parentId ?? null;
+      }
+    }
+    return visible;
+  }, [filter, snapshot.tasks, snapshot.assignments, result, projectCalendar]);
+
+  const rows = useMemo(
+    () => flattenTasks(snapshot.tasks, collapsed, visibleIds),
+    [snapshot.tasks, collapsed, visibleIds],
+  );
   const rowIndexById = useMemo(
     () => new Map(rows.map((row) => [row.task.id, row.index])),
     [rows],
   );
-  const projectCalendar = useMemo(() => compileCalendar(input.projectCalendar), [input]);
 
   const ghost = useMemo(() => {
     if (!drag) return null;

@@ -19,6 +19,12 @@ const taskRowSchema = z.object({
   workMinutes: z.number().int().min(0),
   percentComplete: z.number().int().min(0).max(100),
   notes: z.string().nullable(),
+  category: z
+    .enum(['positionsplan', 'schalplan', 'bewehrungsplan', 'berechnung', 'sonstiges'])
+    .default('sonstiges'),
+  planNumber: z.string().nullable().default(null),
+  status: z.enum(['entwurf', 'in_bearbeitung', 'zur_pruefung', 'freigegeben']).default('in_bearbeitung'),
+  dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
 });
 
 const batchSchema = z.object({

@@ -10,18 +10,19 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createSeed, type DbShape } from './seed';
-import type {
-  AbsenceRow,
-  AssignmentRow,
-  CalendarExceptionRow,
-  CalendarRow,
-  DependencyRow,
-  EmployeeRow,
-  ProjectRow,
-  ProjectSnapshot,
-  Store,
-  TaskBatch,
-  WorkspaceRow,
+import {
+  normalizeTaskRow,
+  type AbsenceRow,
+  type AssignmentRow,
+  type CalendarExceptionRow,
+  type CalendarRow,
+  type DependencyRow,
+  type EmployeeRow,
+  type ProjectRow,
+  type ProjectSnapshot,
+  type Store,
+  type TaskBatch,
+  type WorkspaceRow,
 } from './types';
 
 /** Module-level cache surviving Next.js dev hot reloads. */
@@ -53,7 +54,9 @@ async function dbFile(): Promise<string> {
 async function loadDb(): Promise<DbShape> {
   try {
     const raw = await readFile(await dbFile(), 'utf8');
-    return JSON.parse(raw) as DbShape;
+    const db = JSON.parse(raw) as DbShape;
+    db.tasks = db.tasks.map(normalizeTaskRow);
+    return db;
   } catch {
     const seeded = createSeed(new Date().toISOString().slice(0, 10));
     await persist(seeded);

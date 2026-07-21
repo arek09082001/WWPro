@@ -14,6 +14,7 @@ import type {
   WeekDayConfig,
 } from '@/engine/types';
 import type { Bundesland } from '@/engine/holidays';
+import type { PlanCategory, PlanStatus } from '@/lib/plan-meta';
 
 /** Singleton workspace of the v1 single-tenant setup. */
 export interface WorkspaceRow {
@@ -98,6 +99,25 @@ export interface TaskRow {
   workMinutes: number;
   percentComplete: number;
   notes: string | null;
+  /** Plan category (engineering-office domain); 'sonstiges' for plain tasks. */
+  category: PlanCategory;
+  /** Plan number like "S-101" (null for non-plan tasks). */
+  planNumber: string | null;
+  /** Plan workflow status. */
+  status: PlanStatus;
+  /** Agreed delivery date (Soll-Liefertermin); null when none. */
+  dueDate: IsoDate | null;
+}
+
+/** Fills the plan fields of task rows read from older data files. */
+export function normalizeTaskRow(row: Partial<TaskRow> & Omit<TaskRow, 'category' | 'planNumber' | 'status' | 'dueDate'>): TaskRow {
+  return {
+    ...row,
+    category: row.category ?? 'sonstiges',
+    planNumber: row.planNumber ?? null,
+    status: row.status ?? 'in_bearbeitung',
+    dueDate: row.dueDate ?? null,
+  };
 }
 
 /** A dependency between two tasks of the same project. */

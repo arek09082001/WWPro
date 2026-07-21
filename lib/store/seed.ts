@@ -83,9 +83,9 @@ export function createSeed(today: IsoDate): DbShape {
   ];
 
   const project: ProjectRow = {
-    id: 'proj-relaunch',
-    name: 'Website-Relaunch',
-    code: 'WEB',
+    id: 'proj-wohnhaus',
+    name: 'BV Wohnhaus Lindenweg 12',
+    code: 'WH-L12',
     status: 'active',
     startDate: monday,
     calendarId: calStandard,
@@ -97,6 +97,7 @@ export function createSeed(today: IsoDate): DbShape {
   let key: string | null = null;
   const nextKey = () => (key = generateKeyBetween(key, null));
   const day = 480;
+  const due = (days: number) => addDays(monday, days);
 
   const mk = (id: string, name: string, patch: Partial<TaskRow> = {}): TaskRow => ({
     id,
@@ -115,25 +116,31 @@ export function createSeed(today: IsoDate): DbShape {
     workMinutes: day,
     percentComplete: 0,
     notes: null,
+    category: 'sonstiges',
+    planNumber: null,
+    status: 'in_bearbeitung',
+    dueDate: null,
     ...patch,
   });
 
   const tasks: TaskRow[] = [
-    mk('t-konzept', 'Konzeption'),
-    mk('t-kickoff', 'Kickoff & Anforderungen', { parentId: 't-konzept', durationMinutes: day, workMinutes: day, percentComplete: 100 }),
-    mk('t-ia', 'Informationsarchitektur', { parentId: 't-konzept', durationMinutes: 2 * day, workMinutes: 2 * day, percentComplete: 60 }),
-    mk('t-wireframes', 'Wireframes', { parentId: 't-konzept', durationMinutes: 3 * day, workMinutes: 3 * day }),
-    mk('t-design', 'Design'),
-    mk('t-moodboard', 'Moodboard & Styleguide', { parentId: 't-design', durationMinutes: 2 * day, workMinutes: 2 * day }),
-    mk('t-screendesign', 'Screendesigns', { parentId: 't-design', durationMinutes: 5 * day, workMinutes: 5 * day, taskType: 'fixed_work' }),
-    mk('t-design-review', 'Design-Review', { parentId: 't-design', isMilestone: true, durationMinutes: 0, workMinutes: 0 }),
-    mk('t-umsetzung', 'Umsetzung'),
-    mk('t-setup', 'Projekt-Setup & CI', { parentId: 't-umsetzung', durationMinutes: day, workMinutes: day }),
-    mk('t-frontend', 'Frontend-Umsetzung', { parentId: 't-umsetzung', durationMinutes: 8 * day, workMinutes: 8 * day, taskType: 'fixed_work' }),
-    mk('t-cms', 'CMS-Integration', { parentId: 't-umsetzung', durationMinutes: 5 * day, workMinutes: 5 * day }),
-    mk('t-inhalte', 'Inhalte einpflegen', { parentId: 't-umsetzung', durationMinutes: 4 * day, workMinutes: 4 * day }),
-    mk('t-qa', 'QA & Bugfixing', { durationMinutes: 3 * day, workMinutes: 3 * day }),
-    mk('t-golive', 'Go-Live', { isMilestone: true, durationMinutes: 0, workMinutes: 0 }),
+    mk('t-statik', 'Statische Berechnung'),
+    mk('t-lasten', 'Lastannahmen & Vorbemessung', { parentId: 't-statik', durationMinutes: 2 * day, workMinutes: 2 * day, category: 'berechnung', planNumber: 'ST-01', status: 'freigegeben', percentComplete: 100 }),
+    mk('t-st-fund', 'Statik Fundamente & Bodenplatte', { parentId: 't-statik', durationMinutes: 3 * day, workMinutes: 3 * day, category: 'berechnung', planNumber: 'ST-02', status: 'freigegeben', percentComplete: 100 }),
+    mk('t-st-decken', 'Statik Decken EG + OG', { parentId: 't-statik', durationMinutes: 4 * day, workMinutes: 4 * day, category: 'berechnung', planNumber: 'ST-03', status: 'zur_pruefung', percentComplete: 60, dueDate: due(10) }),
+    mk('t-einreichung', 'Einreichung Prüfstatiker', { parentId: 't-statik', isMilestone: true, durationMinutes: 0, workMinutes: 0, category: 'berechnung', dueDate: due(11) }),
+    mk('t-pos', 'Positionspläne'),
+    mk('t-p100', 'Positionsplan EG', { parentId: 't-pos', durationMinutes: 2 * day, workMinutes: 2 * day, category: 'positionsplan', planNumber: 'P-100', status: 'in_bearbeitung', percentComplete: 40 }),
+    mk('t-p101', 'Positionsplan OG', { parentId: 't-pos', durationMinutes: 2 * day, workMinutes: 2 * day, category: 'positionsplan', planNumber: 'P-101', status: 'entwurf' }),
+    mk('t-schal', 'Schalpläne'),
+    mk('t-s100', 'Schalplan Fundament & Bodenplatte', { parentId: 't-schal', durationMinutes: 3 * day, workMinutes: 3 * day, category: 'schalplan', planNumber: 'S-100', status: 'zur_pruefung', percentComplete: 80, dueDate: due(9) }),
+    mk('t-s101', 'Schalplan Decke über EG', { parentId: 't-schal', durationMinutes: 4 * day, workMinutes: 4 * day, category: 'schalplan', planNumber: 'S-101', status: 'in_bearbeitung', percentComplete: 20, dueDate: due(16) }),
+    mk('t-s102', 'Schalplan Decke über OG', { parentId: 't-schal', durationMinutes: 3 * day, workMinutes: 3 * day, category: 'schalplan', planNumber: 'S-102', status: 'entwurf', dueDate: due(24) }),
+    mk('t-bew', 'Bewehrungspläne'),
+    mk('t-b100', 'Bewehrungsplan Fundament', { parentId: 't-bew', durationMinutes: 4 * day, workMinutes: 4 * day, category: 'bewehrungsplan', planNumber: 'B-100', status: 'in_bearbeitung', percentComplete: 30, dueDate: due(16) }),
+    mk('t-b101', 'Bewehrungsplan Decke über EG', { parentId: 't-bew', durationMinutes: 5 * day, workMinutes: 5 * day, category: 'bewehrungsplan', planNumber: 'B-101', status: 'entwurf', dueDate: due(25) }),
+    mk('t-b102', 'Bewehrungsplan Decke über OG', { parentId: 't-bew', durationMinutes: 4 * day, workMinutes: 4 * day, category: 'bewehrungsplan', planNumber: 'B-102', status: 'entwurf', dueDate: due(32) }),
+    mk('t-lieferung', 'Planlieferung Rohbau komplett', { isMilestone: true, durationMinutes: 0, workMinutes: 0, dueDate: due(32) }),
   ];
 
   const dep = (predecessorId: string, successorId: string, patch: Partial<DependencyRow> = {}): DependencyRow => ({
@@ -147,18 +154,23 @@ export function createSeed(today: IsoDate): DbShape {
   });
 
   const dependencies: DependencyRow[] = [
-    dep('t-kickoff', 't-ia'),
-    dep('t-ia', 't-wireframes'),
-    dep('t-wireframes', 't-moodboard'),
-    dep('t-moodboard', 't-screendesign'),
-    dep('t-screendesign', 't-design-review'),
-    dep('t-design-review', 't-frontend'),
-    dep('t-kickoff', 't-setup'),
-    dep('t-setup', 't-frontend', { type: 'FS' }),
-    dep('t-frontend', 't-cms', { type: 'SS', lagMinutes: 3 * day }),
-    dep('t-cms', 't-inhalte'),
-    dep('t-inhalte', 't-qa'),
-    dep('t-qa', 't-golive'),
+    dep('t-lasten', 't-st-fund'),
+    dep('t-st-fund', 't-st-decken'),
+    dep('t-st-decken', 't-einreichung'),
+    dep('t-lasten', 't-p100'),
+    dep('t-p100', 't-p101'),
+    dep('t-st-fund', 't-s100'),
+    dep('t-st-decken', 't-s101'),
+    dep('t-p100', 't-s101'),
+    dep('t-s101', 't-s102', { type: 'SS', lagMinutes: 2 * day }),
+    dep('t-p101', 't-s102'),
+    // Klassische Statik-Kette: Bewehrung erst, wenn der Schalplan fertig ist.
+    dep('t-s100', 't-b100'),
+    dep('t-s101', 't-b101'),
+    dep('t-s102', 't-b102'),
+    dep('t-b100', 't-lieferung'),
+    dep('t-b101', 't-lieferung'),
+    dep('t-b102', 't-lieferung'),
   ];
 
   const assign = (taskId: string, employeeId: string, units = 1): AssignmentRow => ({
@@ -169,17 +181,17 @@ export function createSeed(today: IsoDate): DbShape {
   });
 
   const assignments: AssignmentRow[] = [
-    assign('t-kickoff', 'emp-anna'),
-    assign('t-ia', 'emp-anna'),
-    assign('t-wireframes', 'emp-clara'),
-    assign('t-moodboard', 'emp-ben'),
-    assign('t-screendesign', 'emp-ben'),
-    assign('t-setup', 'emp-david'),
-    assign('t-frontend', 'emp-david'),
-    assign('t-cms', 'emp-david', 0.5),
-    assign('t-inhalte', 'emp-clara'),
-    assign('t-qa', 'emp-anna', 0.5),
-    assign('t-qa', 'emp-ben', 0.5),
+    assign('t-lasten', 'emp-anna'),
+    assign('t-st-fund', 'emp-anna'),
+    assign('t-st-decken', 'emp-anna'),
+    assign('t-p100', 'emp-ben'),
+    assign('t-p101', 'emp-ben'),
+    assign('t-s100', 'emp-david'),
+    assign('t-s101', 'emp-david'),
+    assign('t-s102', 'emp-clara'),
+    assign('t-b100', 'emp-ben'),
+    assign('t-b101', 'emp-ben'),
+    assign('t-b102', 'emp-clara'),
   ];
 
   const absences: AbsenceRow[] = [
