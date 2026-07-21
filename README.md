@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# WWPro – Projektplanung mit automatischer Terminberechnung
 
-## Getting Started
+WWPro ist ein Projektverwaltungs-Tool im Stil von MS Project: Projekte, Aufgaben,
+Mitarbeiter und Kalender — mit einer eigenen Scheduling-Engine, die Start- und
+Endtermine automatisch aus Arbeitszeit, Abhängigkeiten und Arbeitskalendern
+berechnet.
 
-First, run the development server:
+## Features
+
+- **Automatische Terminberechnung** — Aufgaben nach MS-Project-Semantik:
+  `Arbeit = Dauer × Zuweisung` mit den Berechnungsarten *Feste Zuweisung*,
+  *Feste Arbeit* und *Feste Dauer*. Termine folgen aus Arbeitszeit, aus
+  Start+Ende oder aus der Kombination.
+- **Abhängigkeiten** — Ende–Anfang, Anfang–Anfang, Ende–Ende, Anfang–Ende,
+  jeweils mit positivem/negativem Puffer (in Arbeitszeit), inkl. Zyklus-Schutz.
+- **Einstellbare Work Week** — Arbeitstage und Tageszeiten pro Kalender
+  (z. B. Mo–Fr 8h, Teilzeit vormittags), Feiertags-Import für alle deutschen
+  Bundesländer (lokal berechnet, inkl. Oster-Formel), Sondertage und halbe Tage.
+- **Mitarbeiter & Abwesenheiten** — eigener Kalender je Mitarbeiter (Teilzeit),
+  Urlaub/Krankheit verschiebt zugewiesene Aufgaben automatisch.
+- **Interaktives Gantt** — Drag zum Verschieben, Kanten-Drag zum Ändern der
+  Dauer, Drag-to-Link für Abhängigkeiten, Ghost-Preview („Was-wäre-wenn“)
+  während jedes Drags, kritischer Pfad mit Puffer-Whiskern, Heute-Linie,
+  Wochenend-/Feiertags-/Abwesenheits-Schattierung, Zoom Tag/Woche/Monat/Quartal,
+  virtualisiert für 1.000+ Aufgaben.
+- **„Warum dieses Datum?“** — jede berechnete Zeit erklärt sich selbst:
+  welche Abhängigkeit, welche Einschränkung, welcher Kalender-Sprung maßgeblich war.
+- **Team-Auslastung** — Heatmap Mitarbeiter × Tage mit Kapazität aus dem
+  jeweiligen Kalender, Überlastung, Abwesenheiten und Task-Drilldown.
+- **Versteckte UI** — ⌘K-Command-Palette, Hover-Cards, Inline-Editing,
+  Kontextmenüs, Slide-over-Detailpanel (deep-linkbar via `?task=`),
+  durchgängige Tastatursteuerung, Undo-Toast beim Löschen.
+
+## Stack
+
+Next.js 15 (App Router) · React 19 · TypeScript strict · Tailwind CSS v4 ·
+shadcn/ui · TanStack Query & Virtual · Zustand · Zod · react-hook-form · Vitest.
+
+## Starten
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Beim ersten Start wird `data/wwpro.db.json` mit einem Demo-Projekt angelegt
+(JSON-Datei-Store, kein Setup nötig). Die App läuft auf http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run test    # Engine- und Logik-Tests (Vitest)
+npm run build   # Produktions-Build
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Supabase verbinden (Live-Daten + Login)
 
-## Learn More
+1. Neues Supabase-Projekt anlegen und die Migrationen aus `supabase/migrations/`
+   im SQL-Editor ausführen (`0001_init.sql`, dann `0002_plan_fields.sql`).
+2. `.env.local` nach dem Muster von `.env.example` füllen
+   (URL, Anon-Key, Service-Role-Key — Werte aus *Project Settings → API*).
+3. Fertig: Beim nächsten Start nutzt WWPro die Live-Datenbank, Workspace und
+   Standardkalender werden automatisch angelegt, und die App verlangt einen
+   Login (Registrierung mit E-Mail + Passwort unter `/register`).
 
-To learn more about Next.js, take a look at the following resources:
+Ohne diese Variablen läuft WWPro im lokalen JSON-Datei-Modus ohne Login.
+Der Anon-Key wird ausschließlich für die Authentifizierung genutzt — alle
+Tabellen sind per RLS gesperrt (default deny), Daten fließen nur über die
+serverseitigen API-Routen mit dem Service-Role-Key.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Architektur
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `engine/` — **pure TypeScript Scheduling-Engine** (keine React/Next-Imports):
+  DST-freie Arbeitszeit-Arithmetik (`WorkMoment` = Datum + Minute), Kalender-
+  Kompilierung (Wochentemplate → Ausnahmen → Abwesenheiten), topologischer
+  Forward-Pass, CPM-Backward-Pass (kritischer Pfad, Puffer), Auslastung,
+  strukturierte Erklärungen, deutscher Feiertags-Generator. Vollständig
+  unit-getestet.
+- `lib/store/` — Persistenz hinter einem Store-Interface. v1: JSON-Datei-Store
+  (`data/wwpro.db.json`). Das Supabase-Schema liegt als Migration unter
+  `supabase/migrations/` bereit (identische Zeilenformen, RLS default-deny,
+  Zugriff ausschließlich serverseitig) — ein Drop-in-Wechsel.
+- `app/api/` — schlanke, Zod-validierte Route-Handler; **die Datenbank ist nie
+  vom Client erreichbar**.
+- `lib/queries/` — TanStack-Query-Hooks. Zentrales Muster: Edit →
+  synchroner Engine-Recompute → optimistisches Cache-Update → EIN
+  Batch-Persist der geänderten Zeilen.
+- `features/` — Feature-Ordner (gantt, tasks, projects, team, employees,
+  calendars, shell) mit `pages/` + `components/`.
 
-## Deploy on Vercel
+## Zeitzonen
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Die Engine rechnet ausschließlich mit Kalenderdatum + Tagesminute und ist damit
+per Konstruktion DST-frei. Konvertierung nach UTC passiert nur an der
+Persistenz-Grenze (`lib/mappers.ts`, Workspace-Zeitzone, Standard
+`Europe/Berlin`).
