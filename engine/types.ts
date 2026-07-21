@@ -216,6 +216,9 @@ export interface ScheduleResult {
   tasks: Map<string, ScheduledTask>;
   projectEnd: WorkMoment;
   errors: ScheduleError[];
+  /** All per-employee/day workload cells (also below capacity). */
+  workload: WorkloadCell[];
+  /** Subset of {@link workload} exceeding capacity. */
   overallocations: Overallocation[];
 }
 

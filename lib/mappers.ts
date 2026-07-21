@@ -139,6 +139,31 @@ export function buildScheduleInput(snapshot: ProjectSnapshot): ScheduleInput {
 }
 
 /**
+ * Builds the effective CalendarConfig per employee (own or default calendar
+ * plus merged absences) from any snapshot-like data set. Used by the team
+ * workload view, which is not bound to a single project.
+ */
+export function employeeCalendarConfigs(
+  data: Pick<ProjectSnapshot, 'calendars' | 'exceptions' | 'employees' | 'absences' | 'workspace'>,
+): Record<string, CalendarConfig> {
+  const fallback = calendarConfigOf(data, data.workspace.defaultCalendarId);
+  const configs: Record<string, CalendarConfig> = {};
+  for (const employee of data.employees) {
+    const base =
+      (employee.calendarId ? calendarConfigOf(data, employee.calendarId) : undefined) ?? fallback;
+    if (!base) continue;
+    configs[employee.id] = {
+      ...base,
+      id: `${base.id}::${employee.id}`,
+      absences: data.absences
+        .filter((a) => a.employeeId === employee.id)
+        .map((a) => ({ start: a.startDate, end: a.endDate, type: a.type })),
+    };
+  }
+  return configs;
+}
+
+/**
  * Produces the persisted patch of a scheduled task (start/end as UTC ISO).
  * Returns undefined when nothing changed compared to the stored row.
  */

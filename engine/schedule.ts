@@ -415,6 +415,7 @@ export function computeSchedule(input: ScheduleInput): ScheduleResult {
     tasks: scheduled,
     projectEnd,
     errors,
+    workload,
     overallocations: workload.filter((cell) => cell.assignedMinutes > cell.capacityMinutes),
   };
 }
