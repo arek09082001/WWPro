@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
-import { Geist_Mono, Inter, Manrope } from 'next/font/google';
+import { Geist_Mono, Outfit, Manrope } from 'next/font/google';
 import './globals.css';
 import Providers from './providers';
 import AppShell from '@/features/shell/components/app-shell';
 
-const inter = Inter({
-  variable: '--font-inter',
+const outfit = Outfit({
+  variable: '--font-outfit',
   subsets: ['latin'],
 });
 
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="de" className={`${inter.variable} ${manrope.variable} ${geistMono.variable}`}>
+    <html lang="de" className={`${outfit.variable} ${manrope.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased">
         <Providers>
           <AppShell>{children}</AppShell>
