@@ -7,6 +7,7 @@
  * it makes sense, with a rich context menu including quick status changes.
  */
 
+import type React from 'react';
 import { ChevronDown, ChevronRight, Diamond } from 'lucide-react';
 import type { ScheduledTask } from '@/engine/types';
 import { formatDuration, formatIsoDate, formatWorkHours } from '@/lib/format';
@@ -71,6 +72,10 @@ interface TaskRowCellsProps {
   onCommitWork: (raw: string) => void;
   actions: RowActions;
   collapsed: boolean;
+  /** Starts a row-reorder drag from anywhere on the row (guarded by a threshold). */
+  onPointerDownReorder?: (e: React.PointerEvent) => void;
+  /** Dims the row while it is the one being dragged. */
+  dragging?: boolean;
 }
 
 /**
@@ -81,7 +86,7 @@ interface TaskRowCellsProps {
 export default function TaskRowCells({
   row, scheduled, assignees, selected, avgDayCapacity, lateDays,
   onSelect, onToggleCollapsed, onCommitName, onCommitStart, onCommitEnd,
-  onCommitDuration, onCommitWork, actions, collapsed,
+  onCommitDuration, onCommitWork, actions, collapsed, onPointerDownReorder, dragging,
 }: TaskRowCellsProps) {
   const { task, depth, hasChildren } = row;
   const isSummary = Boolean(scheduled?.isSummary);
@@ -97,8 +102,11 @@ export default function TaskRowCells({
             'sticky left-0 z-10 flex h-full shrink-0 items-center border-r border-b text-xs',
             isSummary ? 'bg-muted' : 'bg-background',
             selected && 'bg-accent/70',
+            onPointerDownReorder && 'cursor-grab',
+            dragging && 'opacity-40',
           )}
           style={{ width: TABLE_WIDTH }}
+          onPointerDown={onPointerDownReorder}
           onClick={onSelect}
           onDoubleClick={() => actions.open(row)}
         >
