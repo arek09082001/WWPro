@@ -28,23 +28,29 @@ import {
 import EditableCell from './editable-cell';
 import type { GanttRow } from '../hooks/use-schedule';
 
-/** Column widths of the task table (name column flexes). */
-export const COLUMNS = { number: 30, start: 88, end: 88, duration: 64, work: 64, people: 76 };
+/** Column widths of the task table (name column flexes; start/end share one stacked cell). */
+export const COLUMNS = { number: 28, name: 252, dates: 76, duration: 56, work: 52, people: 56 };
 /** Total fixed width of the task table pane. */
 export const TABLE_WIDTH =
-  COLUMNS.number + 300 + COLUMNS.start + COLUMNS.end + COLUMNS.duration + COLUMNS.work + COLUMNS.people;
+  COLUMNS.number + COLUMNS.name + COLUMNS.dates + COLUMNS.duration + COLUMNS.work + COLUMNS.people;
 
 /** Context-menu actions offered on a task row. */
 export interface RowActions {
   insertBelow(row: GanttRow): void;
   insertAbove(row: GanttRow): void;
   addChild(row: GanttRow): void;
+  addSectionBelow(row: GanttRow): void;
   indent(row: GanttRow): void;
   outdent(row: GanttRow): void;
   toggleMilestone(row: GanttRow): void;
   setStatus(row: GanttRow, status: PlanStatus): void;
   remove(row: GanttRow): void;
   open(row: GanttRow): void;
+}
+
+/** Formats an ISO date as compact German "TT.MM.JJ". */
+function shortDate(iso: string): string {
+  return `${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(2, 4)}`;
 }
 
 /** Props of {@link TaskRowCells}. */
@@ -88,7 +94,8 @@ export default function TaskRowCells({
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            'sticky left-0 z-10 flex h-full shrink-0 items-center border-r border-b bg-background text-xs',
+            'sticky left-0 z-10 flex h-full shrink-0 items-center border-r border-b text-xs',
+            isSummary ? 'bg-muted' : 'bg-background',
             selected && 'bg-accent/70',
           )}
           style={{ width: TABLE_WIDTH }}
@@ -148,30 +155,30 @@ export default function TaskRowCells({
               />
             )}
           </div>
-          <div style={{ width: COLUMNS.start }} className="shrink-0 px-0.5">
+          <div style={{ width: COLUMNS.dates }} className="shrink-0 px-0.5">
             <EditableCell
+              dense
               type="date"
               value={scheduled?.start.date ?? ''}
-              display={scheduled ? `${scheduled.start.date.slice(8, 10)}.${scheduled.start.date.slice(5, 7)}.${scheduled.start.date.slice(2, 4)}` : '–'}
+              display={scheduled ? <span className="tabular-nums">{shortDate(scheduled.start.date)}</span> : '–'}
               onCommit={onCommitStart}
               disabled={isSummary}
             />
-          </div>
-          <div style={{ width: COLUMNS.end }} className="shrink-0 px-0.5">
             <EditableCell
+              dense
               type="date"
               value={scheduled?.end.date ?? ''}
               display={
                 scheduled ? (
                   <span
-                    className={cn(lateDays > 0 && 'font-semibold text-red-600')}
+                    className={cn('tabular-nums', lateDays > 0 && 'font-semibold text-red-600')}
                     title={
                       lateDays > 0 && task.dueDate
                         ? `Liefertermin ${formatIsoDate(task.dueDate)} um ${lateDays.toLocaleString('de-DE')} Arbeitstage überschritten`
                         : undefined
                     }
                   >
-                    {`${scheduled.end.date.slice(8, 10)}.${scheduled.end.date.slice(5, 7)}.${scheduled.end.date.slice(2, 4)}`}
+                    {shortDate(scheduled.end.date)}
                   </span>
                 ) : (
                   '–'
@@ -231,6 +238,7 @@ export default function TaskRowCells({
         <ContextMenuItem onSelect={() => actions.insertBelow(row)}>Aufgabe darunter einfügen</ContextMenuItem>
         <ContextMenuItem onSelect={() => actions.insertAbove(row)}>Aufgabe darüber einfügen</ContextMenuItem>
         <ContextMenuItem onSelect={() => actions.addChild(row)}>Teilaufgabe hinzufügen</ContextMenuItem>
+        <ContextMenuItem onSelect={() => actions.addSectionBelow(row)}>Abschnitt darunter einfügen</ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => actions.indent(row)}>Einrücken</ContextMenuItem>
         <ContextMenuItem onSelect={() => actions.outdent(row)} disabled={task.parentId === null}>

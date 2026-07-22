@@ -20,6 +20,8 @@ interface EditableCellProps {
   placeholder?: string;
   /** Commit and immediately re-open edit on Tab (spreadsheet feel). */
   align?: 'left' | 'right';
+  /** Compact variant for stacked cells (smaller height + font). */
+  dense?: boolean;
 }
 
 /**
@@ -44,6 +46,7 @@ export default function EditableCell({
   disabled,
   placeholder,
   align = 'left',
+  dense = false,
 }: EditableCellProps) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -81,7 +84,8 @@ export default function EditableCell({
           }
         }}
         className={cn(
-          'h-6 w-full min-w-0 rounded border border-ring bg-background px-1 text-xs outline-none',
+          'w-full min-w-0 rounded border border-ring bg-background outline-none',
+          dense ? 'h-4 px-0.5 text-[10px]' : 'h-6 px-1 text-xs',
           align === 'right' && 'text-right',
         )}
       />
@@ -97,7 +101,8 @@ export default function EditableCell({
         setEditing(true);
       }}
       className={cn(
-        'h-6 w-full truncate rounded px-1 text-left text-xs',
+        'w-full truncate rounded text-left',
+        dense ? 'h-4 px-0.5 text-[10px] leading-4' : 'h-6 px-1 text-xs',
         !disabled && 'cursor-text hover:bg-accent/60',
         disabled && 'cursor-default text-muted-foreground',
         align === 'right' && 'text-right tabular-nums',
