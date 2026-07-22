@@ -1,11 +1,16 @@
 import type { Metadata } from 'next';
-import { Geist, Geist_Mono } from 'next/font/google';
+import { Geist_Mono, Inter, Manrope } from 'next/font/google';
 import './globals.css';
 import Providers from './providers';
 import AppShell from '@/features/shell/components/app-shell';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const inter = Inter({
+  variable: '--font-inter',
+  subsets: ['latin'],
+});
+
+const manrope = Manrope({
+  variable: '--font-manrope',
   subsets: ['latin'],
 });
 
@@ -27,7 +32,7 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="de" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="de" className={`${inter.variable} ${manrope.variable} ${geistMono.variable}`}>
       <body className="font-sans antialiased">
         <Providers>
           <AppShell>{children}</AppShell>

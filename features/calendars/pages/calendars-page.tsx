@@ -81,7 +81,7 @@ export default function CalendarsPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <header className="flex items-center justify-between border-b px-6 py-4">
         <div>
-          <h1 className="text-xl font-semibold">Kalender</h1>
+          <h1 className="font-heading text-xl font-semibold">Kalender</h1>
           <p className="text-sm text-muted-foreground">
             Arbeitswochen, Feiertage und Ausnahmen für Projekte und Mitarbeiter
           </p>

@@ -66,7 +66,7 @@ export default function AuthCard({ mode }: AuthCardProps) {
             W
           </span>
           <div>
-            <h1 className="text-lg font-semibold">WWPro</h1>
+            <h1 className="font-heading text-lg font-semibold">WWPro</h1>
             <p className="text-sm text-muted-foreground">
               {isLogin ? 'Melde dich an, um weiterzuplanen.' : 'Erstelle dein Konto — E-Mail und Passwort genügen.'}
             </p>

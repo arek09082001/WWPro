@@ -84,7 +84,7 @@ export default function EmployeesPage() {
     <div className="flex h-full flex-col overflow-y-auto">
       <header className="flex items-center justify-between border-b px-6 py-4">
         <div>
-          <h1 className="text-xl font-semibold">Mitarbeiter</h1>
+          <h1 className="font-heading text-xl font-semibold">Mitarbeiter</h1>
           <p className="text-sm text-muted-foreground">
             Team, Kalenderzuordnung und Abwesenheiten verwalten
           </p>
