@@ -29,7 +29,7 @@ import { useTimeScale } from '../hooks/use-time-scale';
 import DependencyLayer from './dependency-layer';
 import GanttToolbar from './gantt-toolbar';
 import TaskBar from './task-bar';
-import TaskRowCells, { TABLE_WIDTH, type RowActions } from './task-row-cells';
+import TaskRowCells, { COLUMNS, TABLE_WIDTH, type RowActions } from './task-row-cells';
 
 const ROW_HEIGHT = 34;
 const HEADER_H = 52;
@@ -198,44 +198,71 @@ export default function GanttView({ snapshot }: GanttViewProps) {
     [snapshot.tasks],
   );
 
+  const blankTask = useCallback(
+    (parentId: string | null, sortKey: string, name: string): TaskRow => ({
+      id: crypto.randomUUID(),
+      projectId: snapshot.project.id,
+      parentId,
+      sortKey,
+      name,
+      taskType: 'fixed_units',
+      schedulingMode: 'auto',
+      isMilestone: false,
+      constraintType: 'asap',
+      constraintDate: null,
+      startAt: null,
+      endAt: null,
+      durationMinutes: 480,
+      workMinutes: 480,
+      percentComplete: 0,
+      notes: null,
+      category: 'sonstiges',
+      planNumber: null,
+      status: 'in_bearbeitung',
+      dueDate: null,
+    }),
+    [snapshot.project.id],
+  );
+
   const createTask = useCallback(
     (parentId: string | null, afterSortKey: string | null, beforeSortKey: string | null) => {
-      const row: TaskRow = {
-        id: crypto.randomUUID(),
-        projectId: snapshot.project.id,
-        parentId,
-        sortKey: generateKeyBetween(afterSortKey, beforeSortKey),
-        name: 'Neue Aufgabe',
-        taskType: 'fixed_units',
-        schedulingMode: 'auto',
-        isMilestone: false,
-        constraintType: 'asap',
-        constraintDate: null,
-        startAt: null,
-        endAt: null,
-        durationMinutes: 480,
-        workMinutes: 480,
-        percentComplete: 0,
-        notes: null,
-        category: 'sonstiges',
-        planNumber: null,
-        status: 'in_bearbeitung',
-        dueDate: null,
-      };
+      const row = blankTask(parentId, generateKeyBetween(afterSortKey, beforeSortKey), 'Neue Aufgabe');
       void mutations.upsertTasks([row]);
       select(row.id);
     },
-    [mutations, snapshot.project.id, select],
+    [blankTask, mutations, select],
+  );
+
+  /** Creates a section (summary task) with one child so it collapses/expands right away. */
+  const createSection = useCallback(
+    (afterSortKey: string | null, beforeSortKey: string | null) => {
+      const section = blankTask(null, generateKeyBetween(afterSortKey, beforeSortKey), 'Neuer Abschnitt');
+      const child = blankTask(section.id, generateKeyBetween(null, null), 'Neue Aufgabe');
+      void mutations.upsertTasks([section, child]);
+      select(section.id);
+    },
+    [blankTask, mutations, select],
   );
 
   const addTaskAtEnd = useCallback(() => {
     const selected = snapshot.tasks.find((t) => t.id === selectedTaskId);
+    // A selected section gets the new task appended inside it.
+    if (selected && snapshot.tasks.some((t) => t.parentId === selected.id)) {
+      const children = siblingsOf(selected.id);
+      createTask(selected.id, children[children.length - 1]?.sortKey ?? null, null);
+      return;
+    }
     const parentId = selected?.parentId ?? null;
     const siblings = siblingsOf(parentId);
     const after = selected ?? siblings[siblings.length - 1] ?? null;
     const next = after ? siblings[siblings.findIndex((s) => s.id === after.id) + 1] : null;
     createTask(parentId, after?.sortKey ?? null, next?.sortKey ?? null);
   }, [snapshot.tasks, selectedTaskId, siblingsOf, createTask]);
+
+  const addSectionAtEnd = useCallback(() => {
+    const roots = siblingsOf(null);
+    createSection(roots[roots.length - 1]?.sortKey ?? null, null);
+  }, [siblingsOf, createSection]);
 
   const removeWithUndo = useCallback(
     (row: GanttRow) => {
@@ -305,6 +332,18 @@ export default function GanttView({ snapshot }: GanttViewProps) {
         const children = siblingsOf(row.task.id);
         createTask(row.task.id, children[children.length - 1]?.sortKey ?? null, null);
       },
+      addSectionBelow: (row) => {
+        // Sections live at root level: insert after the row's root ancestor.
+        let root = row.task;
+        while (root.parentId) {
+          const parent = snapshot.tasks.find((t) => t.id === root.parentId);
+          if (!parent) break;
+          root = parent;
+        }
+        const roots = siblingsOf(null);
+        const index = roots.findIndex((r) => r.id === root.id);
+        createSection(root.sortKey, roots[index + 1]?.sortKey ?? null);
+      },
       indent: (row) => {
         const siblings = siblingsOf(row.task.parentId);
         const index = siblings.findIndex((s) => s.id === row.task.id);
@@ -355,7 +394,7 @@ export default function GanttView({ snapshot }: GanttViewProps) {
       remove: removeWithUndo,
       open: (row) => router.push(`?task=${row.task.id}`, { scroll: false }),
     }),
-    [siblingsOf, createTask, mutations, snapshot.tasks, removeWithUndo, router],
+    [siblingsOf, createTask, createSection, mutations, snapshot.tasks, removeWithUndo, router],
   );
 
   // ----- drag interactions ------------------------------------------------
@@ -651,6 +690,7 @@ export default function GanttView({ snapshot }: GanttViewProps) {
         project={snapshot.project}
         employees={snapshot.employees.filter((e) => e.active)}
         onAddTask={addTaskAtEnd}
+        onAddSection={addSectionAtEnd}
         onScrollToday={() => scrollToDate(today)}
       />
       <ProjectCockpit
@@ -675,11 +715,10 @@ export default function GanttView({ snapshot }: GanttViewProps) {
               style={{ width: TABLE_WIDTH }}
             >
               <div className="min-w-0 flex-1 px-2 pb-1.5">Aufgabe</div>
-              <div style={{ width: 88 }} className="px-1 pb-1.5">Start</div>
-              <div style={{ width: 88 }} className="px-1 pb-1.5">Ende</div>
-              <div style={{ width: 64 }} className="px-1 pb-1.5 text-right">Dauer</div>
-              <div style={{ width: 64 }} className="px-1 pb-1.5 text-right">Arbeit</div>
-              <div style={{ width: 76 }} className="px-1 pb-1.5 text-right">Team</div>
+              <div style={{ width: COLUMNS.dates }} className="px-1 pb-1.5">Start / Ende</div>
+              <div style={{ width: COLUMNS.duration }} className="px-1 pb-1.5 text-right">Dauer</div>
+              <div style={{ width: COLUMNS.work }} className="px-1 pb-1.5 text-right">Arbeit</div>
+              <div style={{ width: COLUMNS.people }} className="px-1 pb-1.5 text-right">Team</div>
             </div>
             <div className="relative shrink-0 border-b bg-background" style={{ width: scale.totalWidth }}>
               {scale.months.map((month) => (
@@ -853,6 +892,7 @@ export default function GanttView({ snapshot }: GanttViewProps) {
                 key={row.task.id}
                 className={cn(
                   'absolute left-0 flex hover:bg-accent/30',
+                  row.hasChildren && 'bg-muted/50',
                   selectedTaskId === row.task.id && 'bg-accent/40',
                 )}
                 style={{

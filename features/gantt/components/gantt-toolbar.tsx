@@ -8,7 +8,7 @@
  */
 
 import Link from 'next/link';
-import { ArrowLeft, Crosshair, Filter, Keyboard, ListChecks, Plus, Route } from 'lucide-react';
+import { ArrowLeft, Crosshair, Filter, FolderPlus, Keyboard, ListChecks, Plus, Route } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -151,6 +151,7 @@ interface GanttToolbarProps {
   project: ProjectRow;
   employees: EmployeeRow[];
   onAddTask: () => void;
+  onAddSection: () => void;
   onScrollToday: () => void;
 }
 
@@ -159,11 +160,12 @@ interface GanttToolbarProps {
  * @param props - GanttToolbarProps containing the project, employees for the filter and action callbacks.
  * @param props.project - Project shown in the header.
  * @param props.employees - Employees offered in the filter popover.
- * @param props.onAddTask - Creates a task below the selection.
+ * @param props.onAddTask - Creates a task below the selection (inside a selected section).
+ * @param props.onAddSection - Creates a new section (summary task) at the end.
  * @param props.onScrollToday - Scrolls the timeline to today.
  * @returns A JSX element with the toolbar row.
  */
-export default function GanttToolbar({ project, employees, onAddTask, onScrollToday }: GanttToolbarProps) {
+export default function GanttToolbar({ project, employees, onAddTask, onAddSection, onScrollToday }: GanttToolbarProps) {
   const zoom = useGanttStore((s) => s.zoom);
   const setZoom = useGanttStore((s) => s.setZoom);
   const criticalVisible = useGanttStore((s) => s.criticalVisible);
@@ -186,9 +188,22 @@ export default function GanttToolbar({ project, employees, onAddTask, onScrollTo
         </TooltipTrigger>
         <TooltipContent>Planlieferungsliste mit Soll/Ist und Verzug</TooltipContent>
       </Tooltip>
-      <Button size="sm" variant="outline" onClick={onAddTask}>
-        <Plus /> Aufgabe
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button size="sm" variant="outline" onClick={onAddTask}>
+            <Plus /> Aufgabe
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Aufgabe einfügen — bei ausgewähltem Abschnitt direkt darin</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button size="sm" variant="outline" onClick={onAddSection}>
+            <FolderPlus /> Abschnitt
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>Neuen Abschnitt (zusammenklappbare Gruppe) anlegen</TooltipContent>
+      </Tooltip>
       <div className="ml-auto flex items-center gap-2">
         <FilterPopover employees={employees} />
         <Tooltip>
