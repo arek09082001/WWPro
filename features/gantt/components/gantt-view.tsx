@@ -8,6 +8,7 @@
  */
 
 import { generateKeyBetween } from 'fractional-indexing';
+import { GripVertical } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
@@ -23,6 +24,7 @@ import type { AssignmentRow, DependencyRow, ProjectSnapshot, TaskRow } from '@/l
 import { cn } from '@/lib/utils';
 import { PLAN_CATEGORIES } from '@/lib/plan-meta';
 import { useGanttStore } from '../hooks/use-gantt-store';
+import { resolveDrop } from '../lib/reorder';
 import { lateWorkingDays, useSchedule, type GanttRow } from '../hooks/use-schedule';
 import ProjectCockpit from './project-cockpit';
 import { useTimeScale } from '../hooks/use-time-scale';
@@ -79,11 +81,17 @@ export default function GanttView({ snapshot }: GanttViewProps) {
   const setDrag = useGanttStore((s) => s.setDrag);
   const linkDrag = useGanttStore((s) => s.linkDrag);
   const setLinkDrag = useGanttStore((s) => s.setLinkDrag);
+  const reorderDrag = useGanttStore((s) => s.reorderDrag);
 
   const scale = useTimeScale(snapshot.project.startDate, result.projectEnd.date, zoom);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [hoverChainId, setHoverChainId] = useState<string | null>(null);
   const [cursorTip, setCursorTip] = useState<{ x: number; y: number; text: string } | null>(null);
+  /** Timers/flags backing the row-reorder drag (kept in refs to avoid re-renders). */
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoScrollRaf = useRef<number | null>(null);
+  const autoScrollDir = useRef(0);
+  const suppressClickRef = useRef(false);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -561,6 +569,138 @@ export default function GanttView({ snapshot }: GanttViewProps) {
     [rows, snapshot, mutations, timelinePoint],
   );
 
+  /**
+   * Drags a whole row to re-order / re-parent it. The target parent and slot
+   * are inferred from where the pointer points; a grayed placeholder row opens
+   * a gap at the drop slot once the pointer rests there briefly.
+   */
+  const startRowReorderDrag = useCallback(
+    (row: GanttRow, e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      // Don't hijack clicks on inline editors, the chevron, links or avatars.
+      const targetEl = e.target as HTMLElement | null;
+      if (targetEl?.closest('input, textarea, button, a, [contenteditable="true"]')) return;
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      let engaged = false;
+
+      const boundaryAt = (clientY: number): number => {
+        const sc = scrollRef.current;
+        if (!sc) return 0;
+        const rect = sc.getBoundingClientRect();
+        const y = clientY - rect.top + sc.scrollTop - HEADER_H;
+        return Math.max(0, Math.min(rows.length, Math.round(y / ROW_HEIGHT)));
+      };
+
+      const clearSettle = () => {
+        if (settleTimer.current) {
+          clearTimeout(settleTimer.current);
+          settleTimer.current = null;
+        }
+      };
+
+      const applyTarget = (clientY: number) => {
+        const boundary = boundaryAt(clientY);
+        const drop = resolveDrop({ rows, tasks: snapshot.tasks, draggedId: row.task.id, boundary });
+        const showable = drop.valid && !drop.noop;
+        const prev = useGanttStore.getState().reorderDrag;
+        const stable = Boolean(prev && prev.boundary === boundary && prev.valid === showable);
+        useGanttStore.getState().setReorderDrag({
+          taskId: row.task.id,
+          boundary,
+          settledBoundary: stable ? prev!.settledBoundary : null,
+          targetParentId: drop.targetParentId,
+          targetDepth: drop.targetDepth,
+          valid: showable,
+        });
+        if (!stable) {
+          clearSettle();
+          if (showable) {
+            // The placeholder gap only appears after a short, calm delay.
+            settleTimer.current = setTimeout(() => {
+              const cur = useGanttStore.getState().reorderDrag;
+              if (cur && cur.taskId === row.task.id && cur.boundary === boundary) {
+                useGanttStore.getState().setReorderDrag({ ...cur, settledBoundary: boundary });
+              }
+            }, 140);
+          }
+        }
+      };
+
+      const autoScrollTick = () => {
+        const sc = scrollRef.current;
+        if (sc && autoScrollDir.current !== 0) sc.scrollTop += autoScrollDir.current * 8;
+        autoScrollRaf.current = requestAnimationFrame(autoScrollTick);
+      };
+
+      const onMove = (ev: PointerEvent) => {
+        if (!engaged) {
+          if (Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return;
+          engaged = true;
+          autoScrollRaf.current = requestAnimationFrame(autoScrollTick);
+        }
+        const sc = scrollRef.current;
+        if (sc) {
+          const rect = sc.getBoundingClientRect();
+          const EDGE = 28;
+          autoScrollDir.current =
+            ev.clientY < rect.top + HEADER_H + EDGE ? -1 : ev.clientY > rect.bottom - EDGE ? 1 : 0;
+        }
+        applyTarget(ev.clientY);
+      };
+
+      const commit = () => {
+        const state = useGanttStore.getState().reorderDrag;
+        if (!state || state.taskId !== row.task.id) return;
+        const drop = resolveDrop({
+          rows,
+          tasks: snapshot.tasks,
+          draggedId: row.task.id,
+          boundary: state.boundary,
+        });
+        if (drop.valid && !drop.noop && drop.newSortKey) {
+          void mutations.upsertTasks([
+            { ...row.task, parentId: drop.targetParentId, sortKey: drop.newSortKey },
+          ]);
+        }
+      };
+
+      const onUp = () => {
+        if (engaged) {
+          suppressClickRef.current = true;
+          commit();
+          setTimeout(() => {
+            suppressClickRef.current = false;
+          }, 0);
+        }
+        cleanup();
+      };
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key === 'Escape') {
+          engaged = false;
+          cleanup();
+        }
+      };
+      const cleanup = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('keydown', onKey, true);
+        clearSettle();
+        if (autoScrollRaf.current) {
+          cancelAnimationFrame(autoScrollRaf.current);
+          autoScrollRaf.current = null;
+        }
+        autoScrollDir.current = 0;
+        useGanttStore.getState().setReorderDrag(null);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+      window.addEventListener('keydown', onKey, true);
+    },
+    [rows, snapshot.tasks, mutations],
+  );
+
   // ----- keyboard ---------------------------------------------------------
 
   const scrollToDate = useCallback(
@@ -680,6 +820,9 @@ export default function GanttView({ snapshot }: GanttViewProps) {
   // ----- render -----------------------------------------------------------
 
   const totalHeight = rows.length * ROW_HEIGHT;
+  /** Row index at/after which the reorder placeholder opens a gap (null = none). */
+  const reorderShift = reorderDrag?.settledBoundary ?? null;
+  const dragExtra = reorderShift != null ? ROW_HEIGHT : 0;
   const today = todayIso();
   const todayX = today >= scale.rangeStart && today <= scale.rangeEnd ? scale.x(today) : null;
   const gridStep = zoom === 'day' ? scale.dayWidth : 7 * scale.dayWidth;
@@ -703,10 +846,17 @@ export default function GanttView({ snapshot }: GanttViewProps) {
           if (s) scrollToDate(s.start.date);
         }}
       />
-      <div ref={scrollRef} className="relative flex-1 overflow-auto overscroll-none">
+      <div
+        ref={scrollRef}
+        className={cn(
+          'relative flex-1 overflow-auto overscroll-none',
+          reorderDrag && 'select-none',
+          reorderDrag && (reorderDrag.valid ? 'cursor-grabbing' : 'cursor-no-drop'),
+        )}
+      >
         <div
           className="relative"
-          style={{ width: TABLE_WIDTH + scale.totalWidth, height: HEADER_H + totalHeight + 80 }}
+          style={{ width: TABLE_WIDTH + scale.totalWidth, height: HEADER_H + totalHeight + dragExtra + 80 }}
         >
           {/* ===== header (sticky, first in flow) ===== */}
           <div className="sticky top-0 z-20 flex" style={{ height: HEADER_H, width: TABLE_WIDTH + scale.totalWidth }}>
@@ -896,7 +1046,10 @@ export default function GanttView({ snapshot }: GanttViewProps) {
                   selectedTaskId === row.task.id && 'bg-accent/40',
                 )}
                 style={{
-                  top: HEADER_H + item.start,
+                  top:
+                    HEADER_H +
+                    item.start +
+                    (reorderShift != null && item.index >= reorderShift ? ROW_HEIGHT : 0),
                   height: ROW_HEIGHT,
                   width: TABLE_WIDTH + scale.totalWidth,
                 }}
@@ -909,7 +1062,12 @@ export default function GanttView({ snapshot }: GanttViewProps) {
                   avgDayCapacity={projectCalendar.averageDayCapacity}
                   lateDays={lateDays}
                   collapsed={collapsed.has(row.task.id)}
-                  onSelect={() => select(row.task.id)}
+                  onPointerDownReorder={(e) => startRowReorderDrag(row, e)}
+                  dragging={reorderDrag?.taskId === row.task.id}
+                  onSelect={() => {
+                    if (suppressClickRef.current) return;
+                    select(row.task.id);
+                  }}
                   onToggleCollapsed={() => toggleCollapsed(row.task.id)}
                   onCommitName={(name) => void mutations.upsertTasks([{ ...row.task, name }])}
                   onCommitStart={(date) => {
@@ -974,6 +1132,34 @@ export default function GanttView({ snapshot }: GanttViewProps) {
             );
           })}
 
+          {/* reorder placeholder: a grayed ghost row opening a gap at the drop slot */}
+          {reorderDrag?.settledBoundary != null &&
+            (() => {
+              const dragged = snapshot.tasks.find((t) => t.id === reorderDrag.taskId);
+              if (!dragged) return null;
+              return (
+                <div
+                  className="pointer-events-none absolute left-0 z-20 flex"
+                  style={{
+                    top: HEADER_H + reorderDrag.settledBoundary * ROW_HEIGHT,
+                    height: ROW_HEIGHT,
+                    width: TABLE_WIDTH + scale.totalWidth,
+                  }}
+                >
+                  <div
+                    className="sticky left-0 z-10 flex h-full shrink-0 items-center gap-1 border-y-2 border-dashed border-primary bg-primary/10 pr-1 text-xs font-medium text-primary"
+                    style={{ width: TABLE_WIDTH, paddingLeft: COLUMNS.number + 2 + reorderDrag.targetDepth * 16 }}
+                  >
+                    <GripVertical className="size-3.5 shrink-0 opacity-70" />
+                    <span className="truncate">{dragged.name}</span>
+                  </div>
+                  <div
+                    className="h-full border-y-2 border-dashed border-primary bg-primary/5"
+                    style={{ width: scale.totalWidth }}
+                  />
+                </div>
+              );
+            })()}
         </div>
         {rows.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center">

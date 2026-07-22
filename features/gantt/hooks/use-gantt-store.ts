@@ -61,6 +61,22 @@ export interface LinkDragState {
   targetTaskId?: string;
 }
 
+/** Transient state of a row reorder drag (kept separate from the date drag). */
+export interface ReorderDragState {
+  /** Id of the task being dragged. */
+  taskId: string;
+  /** Live insertion gap the pointer currently points at (row-boundary index). */
+  boundary: number;
+  /** Gap shown as an opened slot once the settle delay elapsed (null = none). */
+  settledBoundary: number | null;
+  /** Parent the task would get on drop (null = root). */
+  targetParentId: string | null;
+  /** Indentation depth of the placeholder at the settled slot. */
+  targetDepth: number;
+  /** False while hovering an invalid gap (inside the dragged subtree). */
+  valid: boolean;
+}
+
 interface GanttState {
   zoom: ZoomLevel;
   selectedTaskId: string | null;
@@ -69,6 +85,7 @@ interface GanttState {
   filter: GanttFilter;
   drag: DragState | null;
   linkDrag: LinkDragState | null;
+  reorderDrag: ReorderDragState | null;
   setZoom(zoom: ZoomLevel): void;
   select(taskId: string | null): void;
   toggleCollapsed(taskId: string): void;
@@ -77,6 +94,7 @@ interface GanttState {
   resetFilter(): void;
   setDrag(drag: DragState | null): void;
   setLinkDrag(drag: LinkDragState | null): void;
+  setReorderDrag(drag: ReorderDragState | null): void;
 }
 
 /** Global store hook of the Gantt view. */
@@ -88,6 +106,7 @@ export const useGanttStore = create<GanttState>((set) => ({
   filter: EMPTY_FILTER,
   drag: null,
   linkDrag: null,
+  reorderDrag: null,
   setZoom: (zoom) => set({ zoom }),
   setFilter: (patch) => set((state) => ({ filter: { ...state.filter, ...patch } })),
   resetFilter: () => set({ filter: EMPTY_FILTER }),
@@ -102,4 +121,5 @@ export const useGanttStore = create<GanttState>((set) => ({
   toggleCritical: () => set((state) => ({ criticalVisible: !state.criticalVisible })),
   setDrag: (drag) => set({ drag }),
   setLinkDrag: (linkDrag) => set({ linkDrag }),
+  setReorderDrag: (reorderDrag) => set({ reorderDrag }),
 }));
