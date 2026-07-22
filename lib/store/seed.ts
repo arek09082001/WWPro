@@ -18,11 +18,13 @@ import type {
   EmployeeRow,
   ProjectRow,
   TaskRow,
+  UserRow,
   WorkspaceRow,
 } from './types';
 
 /** Full in-memory database shape of the JSON store. */
 export interface DbShape {
+  users: UserRow[];
   workspace: WorkspaceRow;
   calendars: CalendarRow[];
   calendarExceptions: CalendarExceptionRow[];
@@ -206,6 +208,7 @@ export function createSeed(today: IsoDate): DbShape {
   ];
 
   return {
+    users: [],
     workspace,
     calendars,
     calendarExceptions: [],

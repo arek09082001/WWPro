@@ -175,7 +175,7 @@ export default function GanttToolbar({ project, employees, onAddTask, onScrollTo
         <Link href="/projects"><ArrowLeft /></Link>
       </Button>
       <span className="size-2.5 rounded-full" style={{ backgroundColor: project.color }} />
-      <h1 className="truncate font-semibold">{project.name}</h1>
+      <h1 className="font-heading truncate font-semibold">{project.name}</h1>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button asChild size="sm" variant="outline">

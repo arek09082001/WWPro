@@ -136,3 +136,14 @@ alter table tasks
   add column status text not null default 'in_bearbeitung'
     check (status in ('entwurf', 'in_bearbeitung', 'zur_pruefung', 'freigegeben')),
   add column due_date date;
+-- Application users for NextAuth credentials login (password hashes via bcrypt).
+
+create table app_users (
+  id uuid primary key default gen_random_uuid(),
+  email text not null unique,
+  password_hash text not null,
+  name text,
+  created_at timestamptz not null default now()
+);
+
+alter table app_users enable row level security;

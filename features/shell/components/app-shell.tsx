@@ -9,7 +9,7 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { CalendarCog, FolderKanban, Gauge, LogOut, Users } from 'lucide-react';
-import { authEnabled, supabaseBrowser } from '@/lib/supabase/browser';
+import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import CommandPalette from './command-palette';
@@ -63,7 +63,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           );
         })}
         <div className="mt-auto flex flex-col items-center gap-2">
-          {authEnabled && (
+          {(
             <Tooltip>
               <TooltipTrigger asChild>
                 <button
@@ -71,12 +71,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   aria-label="Abmelden"
                   className="flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                   onClick={() => {
-                    void supabaseBrowser()
-                      .auth.signOut()
-                      .then(() => {
-                        router.push('/login');
-                        router.refresh();
-                      });
+                    void signOut({ redirect: false }).then(() => {
+                      router.push('/login');
+                      router.refresh();
+                    });
                   }}
                 >
                   <LogOut className="size-5" />

@@ -133,7 +133,7 @@ export default function PlansPage({ projectId }: { projectId: string }) {
           <Link href={`/projects/${projectId}/gantt`}><ArrowLeft /></Link>
         </Button>
         <span className="size-2.5 rounded-full" style={{ backgroundColor: snapshot.project.color }} />
-        <h1 className="truncate font-semibold">{snapshot.project.name}</h1>
+        <h1 className="font-heading truncate font-semibold">{snapshot.project.name}</h1>
         <span className="text-sm text-muted-foreground">· Planlieferungsliste</span>
         <div className="ml-auto flex items-center gap-3">
           <label className="flex items-center gap-2 text-xs text-muted-foreground">

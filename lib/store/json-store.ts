@@ -22,6 +22,7 @@ import {
   type ProjectSnapshot,
   type Store,
   type TaskBatch,
+  type UserRow,
   type WorkspaceRow,
 } from './types';
 
@@ -56,6 +57,7 @@ async function loadDb(): Promise<DbShape> {
     const raw = await readFile(await dbFile(), 'utf8');
     const db = JSON.parse(raw) as DbShape;
     db.tasks = db.tasks.map(normalizeTaskRow);
+    db.users = db.users ?? [];
     return db;
   } catch {
     const seeded = createSeed(new Date().toISOString().slice(0, 10));
@@ -92,6 +94,21 @@ function notFound(entity: string, id: string): never {
 
 /** JSON-file implementation of the {@link Store} interface. */
 export class JsonStore implements Store {
+  async getUserByEmail(email: string): Promise<UserRow | null> {
+    const db = await getDb();
+    return db.users.find((u) => u.email === email) ?? null;
+  }
+
+  async createUser(row: UserRow): Promise<UserRow> {
+    return mutate((db) => {
+      if (db.users.some((u) => u.email === row.email)) {
+        throw Object.assign(new Error('Diese E-Mail ist bereits registriert'), { status: 409 });
+      }
+      db.users.push(row);
+      return row;
+    });
+  }
+
   async getWorkspace(): Promise<WorkspaceRow> {
     return (await getDb()).workspace;
   }

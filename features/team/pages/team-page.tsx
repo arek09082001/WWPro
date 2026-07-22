@@ -163,7 +163,7 @@ export default function TeamPage() {
     <div className="flex h-full flex-col overflow-hidden">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b px-6 py-4">
         <div>
-          <h1 className="text-xl font-semibold">Team-Auslastung</h1>
+          <h1 className="font-heading text-xl font-semibold">Team-Auslastung</h1>
           <p className="text-sm text-muted-foreground">
             Wer arbeitet woran – Auslastung aller Mitarbeiter über alle Projekte
           </p>
