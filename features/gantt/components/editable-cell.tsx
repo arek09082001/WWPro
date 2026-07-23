@@ -84,7 +84,8 @@ export default function EditableCell({
           }
         }}
         className={cn(
-          'w-full min-w-0 rounded border border-ring bg-background outline-none',
+          // select-text overrides the row's select-none so text stays selectable while editing.
+          'w-full min-w-0 select-text rounded border border-ring bg-background outline-none',
           dense ? 'h-4 px-0.5 text-[10px]' : 'h-6 px-1 text-xs',
           align === 'right' && 'text-right',
         )}

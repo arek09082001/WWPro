@@ -99,7 +99,7 @@ export default function TaskRowCells({
       <ContextMenuTrigger asChild>
         <div
           className={cn(
-            'sticky left-0 z-10 flex h-full shrink-0 items-center border-r border-b text-xs',
+            'sticky left-0 z-10 flex h-full shrink-0 select-none items-center border-r border-b text-xs',
             isSummary ? 'bg-muted' : 'bg-background',
             selected && 'bg-accent/70',
             onPointerDownReorder && 'cursor-grab',
@@ -120,6 +120,7 @@ export default function TaskRowCells({
             {hasChildren ? (
               <button
                 type="button"
+                data-no-reorder
                 aria-label={collapsed ? 'Aufklappen' : 'Zuklappen'}
                 className="flex size-4 shrink-0 items-center justify-center rounded hover:bg-accent"
                 onClick={(e) => {
