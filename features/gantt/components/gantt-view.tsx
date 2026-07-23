@@ -35,6 +35,8 @@ import TaskRowCells, { COLUMNS, TABLE_WIDTH, type RowActions } from './task-row-
 
 const ROW_HEIGHT = 34;
 const HEADER_H = 52;
+/** Pointer travel (px, per axis) before a press turns from a click into a reorder drag. */
+const REORDER_DRAG_THRESHOLD = 6;
 
 /** Converts a task row into the engine's TaskInput shape for recalc edits. */
 function toTaskInput(row: TaskRow): TaskInput {
@@ -644,7 +646,12 @@ export default function GanttView({ snapshot }: GanttViewProps) {
 
       const onMove = (ev: PointerEvent) => {
         if (!engaged) {
-          if (Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return;
+          if (
+            Math.abs(ev.clientX - startX) < REORDER_DRAG_THRESHOLD &&
+            Math.abs(ev.clientY - startY) < REORDER_DRAG_THRESHOLD
+          ) {
+            return;
+          }
           engaged = true;
           autoScrollRaf.current = requestAnimationFrame(autoScrollTick);
         }
@@ -698,8 +705,17 @@ export default function GanttView({ snapshot }: GanttViewProps) {
       const onCancel = () => cleanup();
       const onKey = (ev: KeyboardEvent) => {
         if (ev.key === 'Escape') {
+          const wasEngaged = engaged;
           engaged = false;
           cleanup();
+          // The button is usually still held on Escape; arm the click-swallow for
+          // its eventual release so aborting a name-drag doesn't open the editor.
+          if (wasEngaged) {
+            window.addEventListener('pointerup', () => swallowNextClick(), {
+              once: true,
+              capture: true,
+            });
+          }
         }
       };
       const cleanup = () => {
@@ -1161,7 +1177,8 @@ export default function GanttView({ snapshot }: GanttViewProps) {
                 <div
                   className="pointer-events-none absolute left-0 z-[15] flex"
                   style={{
-                    top: HEADER_H + reorderDrag.boundary * ROW_HEIGHT - 1,
+                    // Clamp so the top-slot line clears the sticky header instead of hiding under it.
+                    top: Math.max(HEADER_H, HEADER_H + reorderDrag.boundary * ROW_HEIGHT - 1),
                     height: 2,
                     width: TABLE_WIDTH + scale.totalWidth,
                   }}
