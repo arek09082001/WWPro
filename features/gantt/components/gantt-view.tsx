@@ -35,6 +35,8 @@ import TaskRowCells, { COLUMNS, TABLE_WIDTH, type RowActions } from './task-row-
 
 const ROW_HEIGHT = 34;
 const HEADER_H = 52;
+/** Pointer travel (px, per axis) before a press turns from a click into a reorder drag. */
+const REORDER_DRAG_THRESHOLD = 6;
 
 /** Converts a task row into the engine's TaskInput shape for recalc edits. */
 function toTaskInput(row: TaskRow): TaskInput {
@@ -91,7 +93,6 @@ export default function GanttView({ snapshot }: GanttViewProps) {
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrollRaf = useRef<number | null>(null);
   const autoScrollDir = useRef(0);
-  const suppressClickRef = useRef(false);
 
   const virtualizer = useVirtualizer({
     count: rows.length,
@@ -570,16 +571,22 @@ export default function GanttView({ snapshot }: GanttViewProps) {
   );
 
   /**
-   * Drags a whole row to re-order / re-parent it. The target parent and slot
-   * are inferred from where the pointer points; a grayed placeholder row opens
-   * a gap at the drop slot once the pointer rests there briefly.
+   * Drags a whole row to re-order / re-parent it. The entire row — the name
+   * cell included — acts as a grab handle: a press that moves past a small
+   * threshold becomes a drag, a press that doesn't stays a click (edit/select).
+   * The target parent and slot are inferred from where the pointer points; a
+   * thin insertion line marks the drop slot instantly, and a grayed placeholder
+   * row opens a gap there once the pointer rests briefly.
    */
   const startRowReorderDrag = useCallback(
     (row: GanttRow, e: React.PointerEvent) => {
       if (e.button !== 0) return;
-      // Don't hijack clicks on inline editors, the chevron, links or avatars.
+      // The whole row is a grab handle — including the name and the other
+      // click-to-edit cells (a real drag is told apart from a click by the
+      // movement threshold below). Only bail on an already-open editor or on
+      // controls that opt out via `data-no-reorder` (e.g. the collapse chevron).
       const targetEl = e.target as HTMLElement | null;
-      if (targetEl?.closest('input, textarea, button, a, [contenteditable="true"]')) return;
+      if (targetEl?.closest('input, textarea, [contenteditable="true"], [data-no-reorder]')) return;
 
       const startX = e.clientX;
       const startY = e.clientY;
@@ -613,6 +620,9 @@ export default function GanttView({ snapshot }: GanttViewProps) {
           targetParentId: drop.targetParentId,
           targetDepth: drop.targetDepth,
           valid: showable,
+          // Only a gap inside the dragged subtree truly forbids the drop; the
+          // home slot (noop) still reads as a normal grab, not "no-drop".
+          blocked: !drop.valid,
         });
         if (!stable) {
           clearSettle();
@@ -636,7 +646,12 @@ export default function GanttView({ snapshot }: GanttViewProps) {
 
       const onMove = (ev: PointerEvent) => {
         if (!engaged) {
-          if (Math.abs(ev.clientX - startX) < 4 && Math.abs(ev.clientY - startY) < 4) return;
+          if (
+            Math.abs(ev.clientX - startX) < REORDER_DRAG_THRESHOLD &&
+            Math.abs(ev.clientY - startY) < REORDER_DRAG_THRESHOLD
+          ) {
+            return;
+          }
           engaged = true;
           autoScrollRaf.current = requestAnimationFrame(autoScrollTick);
         }
@@ -666,25 +681,47 @@ export default function GanttView({ snapshot }: GanttViewProps) {
         }
       };
 
+      // Swallow the single click the browser fires after a drag so releasing a
+      // reorder over the name doesn't also open its editor or reselect the row.
+      const swallowNextClick = () => {
+        const handler = (ev: MouseEvent) => {
+          ev.stopPropagation();
+          ev.preventDefault();
+          window.removeEventListener('click', handler, true);
+        };
+        window.addEventListener('click', handler, true);
+        // If no click follows (pointer released off any clickable target), drop
+        // the guard next frame so it can never eat an unrelated later click.
+        requestAnimationFrame(() => window.removeEventListener('click', handler, true));
+      };
+
       const onUp = () => {
         if (engaged) {
-          suppressClickRef.current = true;
+          swallowNextClick();
           commit();
-          setTimeout(() => {
-            suppressClickRef.current = false;
-          }, 0);
         }
         cleanup();
       };
+      const onCancel = () => cleanup();
       const onKey = (ev: KeyboardEvent) => {
         if (ev.key === 'Escape') {
+          const wasEngaged = engaged;
           engaged = false;
           cleanup();
+          // The button is usually still held on Escape; arm the click-swallow for
+          // its eventual release so aborting a name-drag doesn't open the editor.
+          if (wasEngaged) {
+            window.addEventListener('pointerup', () => swallowNextClick(), {
+              once: true,
+              capture: true,
+            });
+          }
         }
       };
       const cleanup = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
+        window.removeEventListener('pointercancel', onCancel);
         window.removeEventListener('keydown', onKey, true);
         clearSettle();
         if (autoScrollRaf.current) {
@@ -696,6 +733,7 @@ export default function GanttView({ snapshot }: GanttViewProps) {
       };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
+      window.addEventListener('pointercancel', onCancel);
       window.addEventListener('keydown', onKey, true);
     },
     [rows, snapshot.tasks, mutations],
@@ -851,7 +889,7 @@ export default function GanttView({ snapshot }: GanttViewProps) {
         className={cn(
           'relative flex-1 overflow-auto overscroll-none',
           reorderDrag && 'select-none',
-          reorderDrag && (reorderDrag.valid ? 'cursor-grabbing' : 'cursor-no-drop'),
+          reorderDrag && (reorderDrag.blocked ? 'cursor-no-drop' : 'cursor-grabbing'),
         )}
       >
         <div
@@ -1064,10 +1102,7 @@ export default function GanttView({ snapshot }: GanttViewProps) {
                   collapsed={collapsed.has(row.task.id)}
                   onPointerDownReorder={(e) => startRowReorderDrag(row, e)}
                   dragging={reorderDrag?.taskId === row.task.id}
-                  onSelect={() => {
-                    if (suppressClickRef.current) return;
-                    select(row.task.id);
-                  }}
+                  onSelect={() => select(row.task.id)}
                   onToggleCollapsed={() => toggleCollapsed(row.task.id)}
                   onCommitName={(name) => void mutations.upsertTasks([{ ...row.task, name }])}
                   onCommitStart={(date) => {
@@ -1131,6 +1166,34 @@ export default function GanttView({ snapshot }: GanttViewProps) {
               </div>
             );
           })}
+
+          {/* live insertion line: an instant, indented hint of where the drop
+              lands, shown before the settle delay opens the placeholder gap */}
+          {reorderDrag?.valid &&
+            reorderDrag.settledBoundary == null &&
+            (() => {
+              const indent = COLUMNS.number + 2 + reorderDrag.targetDepth * 16;
+              return (
+                <div
+                  className="pointer-events-none absolute left-0 z-[15] flex"
+                  style={{
+                    // Clamp so the top-slot line clears the sticky header instead of hiding under it.
+                    top: Math.max(HEADER_H, HEADER_H + reorderDrag.boundary * ROW_HEIGHT - 1),
+                    height: 2,
+                    width: TABLE_WIDTH + scale.totalWidth,
+                  }}
+                >
+                  <div
+                    className="sticky left-0 z-10 flex h-0.5 shrink-0 items-center"
+                    style={{ width: TABLE_WIDTH, paddingLeft: indent }}
+                  >
+                    <div className="-ml-1 size-2 shrink-0 rounded-full bg-primary ring-2 ring-background" />
+                    <div className="h-0.5 flex-1 rounded-full bg-primary" />
+                  </div>
+                  <div className="h-0.5 shrink-0 bg-primary/70" style={{ width: scale.totalWidth }} />
+                </div>
+              );
+            })()}
 
           {/* reorder placeholder: a grayed ghost row opening a gap at the drop slot */}
           {reorderDrag?.settledBoundary != null &&

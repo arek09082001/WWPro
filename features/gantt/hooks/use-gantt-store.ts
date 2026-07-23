@@ -73,8 +73,10 @@ export interface ReorderDragState {
   targetParentId: string | null;
   /** Indentation depth of the placeholder at the settled slot. */
   targetDepth: number;
-  /** False while hovering an invalid gap (inside the dragged subtree). */
+  /** True while the gap is a real move target (drives the live insertion line). */
   valid: boolean;
+  /** True only when the gap lies inside the dragged subtree (drop forbidden). */
+  blocked: boolean;
 }
 
 interface GanttState {
